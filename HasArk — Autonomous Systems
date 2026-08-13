@@ -1,0 +1,817 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="description" content="HasArk — We build autonomous systems. AI agents, intelligent workflows, and data infrastructure for teams that refuse to wait.">
+    <title>HasArk — Autonomous Systems</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&family=Space+Grotesk:wght@400;500;600;700;800&family=IBM+Plex+Mono:wght@400;500&display=swap" rel="stylesheet">
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/gsap/3.12.5/gsap.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/gsap/3.12.5/ScrollTrigger.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+    <script>
+        tailwind.config = {
+            theme: {
+                extend: {
+                    fontFamily: {
+                        sans: ['Inter', 'sans-serif'],
+                        display: ['Space Grotesk', 'sans-serif'],
+                        mono: ['IBM Plex Mono', 'monospace'],
+                    },
+                    colors: {
+                        void: '#020105',
+                        ink: '#080610',
+                        surface: '#100d1a',
+                        elevated: '#181425',
+                        ark: { 400: '#a78bfa', 500: '#8b5cf6', 600: '#7c3aed' },
+                    }
+                }
+            }
+        }
+    </script>
+    <style>
+        :root {
+            --mouse-x: 0.5;
+            --mouse-y: 0.5;
+        }
+
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+
+        html { scroll-behavior: smooth; }
+
+        body {
+            font-family: 'Inter', sans-serif;
+            background: #020105;
+            color: #e2e8f0;
+            overflow-x: hidden;
+            cursor: none;
+        }
+
+        /* ===== CUSTOM CURSOR ===== */
+        .cursor-system {
+            position: fixed;
+            top: 0; left: 0;
+            pointer-events: none;
+            z-index: 10000;
+            mix-blend-mode: difference;
+        }
+
+        .cursor-core {
+            width: 8px; height: 8px;
+            background: #fff;
+            border-radius: 50%;
+            transform: translate(-50%, -50%);
+            transition: transform 0.15s ease;
+        }
+
+        .cursor-ring {
+            position: absolute;
+            width: 40px; height: 40px;
+            border: 1px solid rgba(255,255,255,0.3);
+            border-radius: 50%;
+            transform: translate(-50%, -50%);
+            transition: width 0.3s, height 0.3s, border-color 0.3s;
+        }
+
+        .cursor-system.hover .cursor-core { transform: translate(-50%, -50%) scale(0); }
+        .cursor-system.hover .cursor-ring {
+            width: 60px; height: 60px;
+            border-color: rgba(167, 139, 250, 0.5);
+            background: rgba(167, 139, 250, 0.05);
+        }
+
+        /* ===== WEBGL ===== */
+        #webgl-bg {
+            position: fixed;
+            inset: 0;
+            z-index: -1;
+            opacity: 0.6;
+        }
+
+        /* ===== VELOCITY SKEW ===== */
+        .velocity-skew {
+            transition: transform 0.1s linear;
+            will-change: transform;
+        }
+
+        /* ===== 3D TILT ===== */
+        .tilt-card {
+            transform-style: preserve-3d;
+            transition: transform 0.1s ease-out;
+        }
+
+        .tilt-content { transform: translateZ(40px); }
+
+        /* ===== SPOTLIGHT ===== */
+        .spotlight-section { position: relative; overflow: hidden; }
+        .spotlight-mask {
+            position: absolute;
+            inset: 0;
+            background: radial-gradient(
+                600px circle at calc(var(--mouse-x) * 100%) calc(var(--mouse-y) * 100%),
+                transparent 0%,
+                rgba(2, 1, 5, 0.95) 100%
+            );
+            pointer-events: none;
+        }
+
+        /* ===== MARQUEE ===== */
+        .marquee-track {
+            display: flex;
+            animation: marquee 30s linear infinite;
+        }
+        .marquee-track:hover { animation-play-state: paused; }
+        @keyframes marquee {
+            0% { transform: translateX(0); }
+            100% { transform: translateX(-50%); }
+        }
+
+        /* ===== FLOATING DOCK ===== */
+        .floating-dock {
+            position: fixed;
+            bottom: 2rem;
+            left: 50%;
+            transform: translateX(-50%) translateY(100px);
+            z-index: 100;
+            transition: transform 0.5s cubic-bezier(0.23, 1, 0.32, 1);
+        }
+        .floating-dock.visible { transform: translateX(-50%) translateY(0); }
+        .dock-item {
+            transition: all 0.3s cubic-bezier(0.23, 1, 0.32, 1);
+        }
+        .dock-item:hover {
+            transform: translateY(-8px) scale(1.1);
+        }
+
+        /* ===== GRAIN ===== */
+        .grain {
+            position: fixed;
+            inset: 0;
+            pointer-events: none;
+            z-index: 9998;
+            opacity: 0.025;
+            background-image: url("data:image/svg+xml,%3Csvg viewBox='0 0 512 512' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.75' numOctaves='4' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)'/%3E%3C/svg%3E");
+        }
+
+        /* ===== KINETIC ===== */
+        .kinetic {
+            font-variation-settings: 'wght' 400;
+            transition: font-variation-settings 0.3s ease;
+        }
+        .kinetic:hover { font-variation-settings: 'wght' 700; }
+
+        /* ===== MAGNETIC ===== */
+        .magnetic {
+            transition: transform 0.3s cubic-bezier(0.23, 1, 0.32, 1);
+        }
+
+        /* ===== NOISE BTN ===== */
+        .noise-btn {
+            position: relative;
+            overflow: hidden;
+        }
+        .noise-btn::before {
+            content: '';
+            position: absolute;
+            inset: 0;
+            background: linear-gradient(105deg, transparent 40%, rgba(255,255,255,0.1) 50%, transparent 60%);
+            transform: translateX(-100%);
+            transition: transform 0.6s;
+        }
+        .noise-btn:hover::before { transform: translateX(100%); }
+
+        /* ===== SELECTION ===== */
+        ::selection {
+            background: rgba(139, 92, 246, 0.4);
+            color: #fff;
+        }
+
+        /* ===== SCROLLBAR ===== */
+        ::-webkit-scrollbar { width: 4px; }
+        ::-webkit-scrollbar-track { background: #020105; }
+        ::-webkit-scrollbar-thumb { background: #2e1065; border-radius: 2px; }
+
+        @media (pointer: coarse) {
+            body { cursor: auto; }
+            .cursor-system { display: none; }
+        }
+    </style>
+<base target="_blank">
+</head>
+<body>
+
+    <!-- WebGL Background -->
+    <canvas id="webgl-bg"></canvas>
+
+    <!-- Film Grain -->
+    <div class="grain"></div>
+
+    <!-- Custom Cursor -->
+    <div class="cursor-system" id="cursorSystem">
+        <div class="cursor-ring" id="cursorRing"></div>
+        <div class="cursor-core" id="cursorCore"></div>
+    </div>
+
+    <!-- Floating Dock -->
+    <nav class="floating-dock" id="dock">
+        <div class="flex items-center gap-2 px-4 py-3 rounded-2xl bg-surface/80 backdrop-blur-xl border border-white/5 shadow-2xl">
+            <a href="#work" class="dock-item w-10 h-10 rounded-xl flex items-center justify-center text-gray-400 hover:text-white hover:bg-white/5 transition-colors">
+                <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M19 11H5m14 0a2 2 0 012 2v6a2 2 0 01-2 2H5a2 2 0 01-2-2v-6a2 2 0 012-2m14 0V9a2 2 0 00-2-2M5 11V9a2 2 0 012-2m0 0V5a2 2 0 012-2h6a2 2 0 012 2v2M7 7h10"/></svg>
+            </a>
+            <a href="#services" class="dock-item w-10 h-10 rounded-xl flex items-center justify-center text-gray-400 hover:text-white hover:bg-white/5 transition-colors">
+                <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M13 10V3L4 14h7v7l9-11h-7z"/></svg>
+            </a>
+            <div class="w-px h-6 bg-white/10 mx-1"></div>
+            <a href="#contact" class="dock-item px-4 h-10 rounded-xl flex items-center justify-center bg-ark-600/20 text-ark-300 hover:bg-ark-600/30 transition-colors text-sm font-medium">
+                Start
+            </a>
+        </div>
+    </nav>
+
+    <!-- Hero -->
+    <section class="relative min-h-screen flex items-center justify-center overflow-hidden">
+        <div class="relative z-10 max-w-6xl mx-auto px-6 text-center">
+            <div class="mb-8">
+                <span class="font-mono text-xs text-ark-400 tracking-[0.4em] uppercase" id="scrambleLabel">
+                    AUTONOMOUS SYSTEMS STUDIO
+                </span>
+            </div>
+
+            <h1 class="font-display font-bold text-7xl md:text-9xl lg:text-[12rem] text-white leading-[0.85] tracking-tighter mb-8">
+                <div class="velocity-skew" id="heroLine1">We Build</div>
+                <div class="velocity-skew text-transparent bg-clip-text bg-gradient-to-r from-ark-400 via-purple-400 to-ark-400" style="background-size: 200% auto; animation: gradient 3s linear infinite;">
+                    Machines
+                </div>
+                <div class="velocity-skew" id="heroLine3">That Think</div>
+            </h1>
+
+            <p class="text-gray-400 text-lg md:text-xl max-w-lg mx-auto mb-12 leading-relaxed">
+                AI agents, intelligent workflows, and data infrastructure for teams that refuse to wait.
+            </p>
+
+            <div class="flex items-center justify-center gap-6">
+                <a href="#contact" class="magnetic noise-btn px-8 py-4 bg-white text-void rounded-full font-medium text-sm tracking-wide hover:scale-105 transition-transform">
+                    Initiate Project
+                </a>
+                <a href="#work" class="magnetic text-gray-400 hover:text-white text-sm tracking-wide transition-colors flex items-center gap-2 group">
+                    View Work
+                    <svg class="w-4 h-4 group-hover:translate-x-1 transition-transform" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17 8l4 4m0 0l-4 4m4-4H3"/></svg>
+                </a>
+            </div>
+        </div>
+
+        <div class="absolute bottom-12 left-1/2 -translate-x-1/2 flex flex-col items-center gap-3 opacity-40">
+            <span class="font-mono text-[10px] text-gray-500 tracking-widest">SCROLL</span>
+            <div class="w-px h-16 bg-gradient-to-b from-ark-500 to-transparent"></div>
+        </div>
+    </section>
+
+    <!-- Marquee -->
+    <section class="py-12 border-y border-white/5 overflow-hidden">
+        <div class="marquee-track">
+            <div class="flex items-center gap-12 px-6 whitespace-nowrap">
+                <span class="font-mono text-sm text-gray-600">PYTHON</span><span class="text-ark-500">◆</span>
+                <span class="font-mono text-sm text-gray-600">FASTAPI</span><span class="text-ark-500">◆</span>
+                <span class="font-mono text-sm text-gray-600">LANGCHAIN</span><span class="text-ark-500">◆</span>
+                <span class="font-mono text-sm text-gray-600">OPENAI</span><span class="text-ark-500">◆</span>
+                <span class="font-mono text-sm text-gray-600">REACT</span><span class="text-ark-500">◆</span>
+                <span class="font-mono text-sm text-gray-600">POSTGRESQL</span><span class="text-ark-500">◆</span>
+                <span class="font-mono text-sm text-gray-600">DOCKER</span><span class="text-ark-500">◆</span>
+                <span class="font-mono text-sm text-gray-600">XERO API</span><span class="text-ark-500">◆</span>
+            </div>
+            <div class="flex items-center gap-12 px-6 whitespace-nowrap">
+                <span class="font-mono text-sm text-gray-600">PYTHON</span><span class="text-ark-500">◆</span>
+                <span class="font-mono text-sm text-gray-600">FASTAPI</span><span class="text-ark-500">◆</span>
+                <span class="font-mono text-sm text-gray-600">LANGCHAIN</span><span class="text-ark-500">◆</span>
+                <span class="font-mono text-sm text-gray-600">OPENAI</span><span class="text-ark-500">◆</span>
+                <span class="font-mono text-sm text-gray-600">REACT</span><span class="text-ark-500">◆</span>
+                <span class="font-mono text-sm text-gray-600">POSTGRESQL</span><span class="text-ark-500">◆</span>
+                <span class="font-mono text-sm text-gray-600">DOCKER</span><span class="text-ark-500">◆</span>
+                <span class="font-mono text-sm text-gray-600">XERO API</span><span class="text-ark-500">◆</span>
+            </div>
+        </div>
+    </section>
+
+    <!-- Work -->
+    <section id="work" class="py-32 relative">
+        <div class="max-w-7xl mx-auto px-6">
+            <div class="flex items-end justify-between mb-20">
+                <div>
+                    <span class="font-mono text-xs text-ark-400 tracking-[0.4em] uppercase block mb-4">Selected Work</span>
+                    <h2 class="font-display font-bold text-5xl md:text-7xl text-white kinetic">Case Studies</h2>
+                </div>
+                <span class="font-mono text-xs text-gray-700 hidden md:block">01 — 03</span>
+            </div>
+
+            <!-- WardTech -->
+            <div class="tilt-card group relative rounded-3xl bg-surface/50 border border-white/5 p-8 md:p-12 mb-8 overflow-hidden" data-tilt>
+                <div class="absolute inset-0 bg-gradient-to-br from-ark-600/10 to-purple-600/5 opacity-0 group-hover:opacity-100 transition-opacity duration-700"></div>
+                <div class="relative z-10 grid md:grid-cols-2 gap-12 items-center">
+                    <div>
+                        <div class="flex items-center gap-3 mb-6">
+                            <span class="px-3 py-1 rounded-full bg-ark-500/10 text-ark-300 text-xs font-mono">UK CLIENT</span>
+                            <span class="text-gray-700 text-xs font-mono">2024</span>
+                        </div>
+                        <h3 class="font-display font-bold text-4xl md:text-5xl text-white mb-4 group-hover:text-ark-300 transition-colors">WardTech</h3>
+                        <p class="text-gray-400 leading-relaxed mb-8 text-lg">
+                            Automated sales reporting pipeline. SPOS Cloud to Xero in 2 minutes instead of 1 hour. Zero errors, infinite scale.
+                        </p>
+                        <div class="flex gap-12">
+                            <div>
+                                <div class="font-display text-4xl font-bold text-white">1h→2m</div>
+                                <div class="text-gray-600 text-xs font-mono mt-1">TIME</div>
+                            </div>
+                            <div>
+                                <div class="font-display text-4xl font-bold text-white">£1.2k</div>
+                                <div class="text-gray-600 text-xs font-mono mt-1">VALUE/YR</div>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="tilt-content">
+                        <div class="aspect-[4/3] rounded-2xl bg-gradient-to-br from-ark-900/50 to-purple-900/20 border border-white/5 flex items-center justify-center">
+                            <div class="text-center">
+                                <div class="w-20 h-20 mx-auto mb-4 rounded-3xl bg-ark-500/10 flex items-center justify-center border border-ark-500/20">
+                                    <svg class="w-10 h-10 text-ark-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M13 10V3L4 14h7v7l9-11h-7z"/></svg>
+                                </div>
+                                <span class="font-mono text-xs text-gray-600">Python · FastAPI · Xero API</span>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <div class="grid md:grid-cols-2 gap-8">
+                <div class="tilt-card group rounded-3xl bg-surface/50 border border-white/5 p-8" data-tilt>
+                    <span class="px-3 py-1 rounded-full bg-purple-500/10 text-purple-300 text-xs font-mono mb-6 inline-block">RESEARCH</span>
+                    <h3 class="font-display font-bold text-2xl text-white mb-3 group-hover:text-purple-300 transition-colors">BioTech Institute</h3>
+                    <p class="text-gray-400 mb-6">AI literature review assistant. 80% time reduction for research teams.</p>
+                    <div class="font-display text-5xl font-bold text-white">80%</div>
+                    <div class="text-gray-600 text-xs font-mono mt-1">FASTER REVIEWS</div>
+                </div>
+
+                <div class="tilt-card group rounded-3xl bg-surface/50 border border-white/5 p-8" data-tilt>
+                    <span class="px-3 py-1 rounded-full bg-emerald-500/10 text-emerald-300 text-xs font-mono mb-6 inline-block">OPERATIONS</span>
+                    <h3 class="font-display font-bold text-2xl text-white mb-3 group-hover:text-emerald-300 transition-colors">DataFlow</h3>
+                    <p class="text-gray-400 mb-6">Real-time operations dashboard. Eliminated 15 hours of manual reporting weekly.</p>
+                    <div class="font-display text-5xl font-bold text-white">15h</div>
+                    <div class="text-gray-600 text-xs font-mono mt-1">WEEKLY SAVED</div>
+                </div>
+            </div>
+        </div>
+    </section>
+
+    <!-- Services with Spotlight -->
+    <section id="services" class="py-32 relative spotlight-section">
+        <div class="spotlight-mask"></div>
+        <div class="relative z-10 max-w-7xl mx-auto px-6">
+            <div class="text-center mb-24">
+                <span class="font-mono text-xs text-ark-400 tracking-[0.4em] uppercase block mb-4">Capabilities</span>
+                <h2 class="font-display font-bold text-5xl md:text-7xl text-white kinetic">What We Build</h2>
+            </div>
+
+            <div class="grid md:grid-cols-2 gap-6 max-w-5xl mx-auto">
+                <div class="group p-8 rounded-2xl border border-white/5 hover:border-ark-500/30 bg-surface/30 hover:bg-elevated/50 transition-all cursor-pointer">
+                    <div class="w-14 h-14 rounded-2xl bg-ark-500/10 flex items-center justify-center mb-6 group-hover:bg-ark-500/20 transition-colors">
+                        <svg class="w-7 h-7 text-ark-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M9.75 17L9 20l-1 1h8l-1-1-.75-3M3 13h18M5 17h14a2 2 0 002-2V5a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z"/></svg>
+                    </div>
+                    <h3 class="font-display font-bold text-2xl text-white mb-3">AI Agents</h3>
+                    <p class="text-gray-400 leading-relaxed">Autonomous teammates trained on your domain. Handle support, research, content, decisions.</p>
+                </div>
+
+                <div class="group p-8 rounded-2xl border border-white/5 hover:border-purple-500/30 bg-surface/30 hover:bg-elevated/50 transition-all cursor-pointer">
+                    <div class="w-14 h-14 rounded-2xl bg-purple-500/10 flex items-center justify-center mb-6 group-hover:bg-purple-500/20 transition-colors">
+                        <svg class="w-7 h-7 text-purple-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M19.428 15.428a2 2 0 00-1.022-.547l-2.387-.477a6 6 0 00-3.86.517l-.318.158a6 6 0 01-3.86.517L6.05 15.21a2 2 0 00-1.806.547M8 4h8l-1 1v5.172a2 2 0 00.586 1.414l5 5c1.26 1.26.367 3.414-1.415 3.414H4.828c-1.782 0-2.674-2.154-1.414-3.414l5-5A2 2 0 009 10.172V5L8 4z"/></svg>
+                    </div>
+                    <h3 class="font-display font-bold text-2xl text-white mb-3">Workflows</h3>
+                    <p class="text-gray-400 leading-relaxed">Connect your tools into intelligent pipelines. Gmail, Sheets, Notion, Xero, CRM — unified.</p>
+                </div>
+
+                <div class="group p-8 rounded-2xl border border-white/5 hover:border-emerald-500/30 bg-surface/30 hover:bg-elevated/50 transition-all cursor-pointer">
+                    <div class="w-14 h-14 rounded-2xl bg-emerald-500/10 flex items-center justify-center mb-6 group-hover:bg-emerald-500/20 transition-colors">
+                        <svg class="w-7 h-7 text-emerald-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z"/></svg>
+                    </div>
+                    <h3 class="font-display font-bold text-2xl text-white mb-3">Data</h3>
+                    <p class="text-gray-400 leading-relaxed">Real-time dashboards, automated reports, predictive models. Transform chaos into clarity.</p>
+                </div>
+
+                <div class="group p-8 rounded-2xl border border-white/5 hover:border-orange-500/30 bg-surface/30 hover:bg-elevated/50 transition-all cursor-pointer">
+                    <div class="w-14 h-14 rounded-2xl bg-orange-500/10 flex items-center justify-center mb-6 group-hover:bg-orange-500/20 transition-colors">
+                        <svg class="w-7 h-7 text-orange-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M21 12a9 9 0 01-9 9m9-9a9 9 0 00-9-9m9 9H3m9 9a9 9 0 01-9-9m9 9c1.657 0 3-4.03 3-9s-1.343-9-3-9m0 18c-1.657 0-3-4.03-3-9s1.343-9 3-9m-9 9a9 9 0 019-9"/></svg>
+                    </div>
+                    <h3 class="font-display font-bold text-2xl text-white mb-3">Web</h3>
+                    <p class="text-gray-400 leading-relaxed">Fast, purposeful platforms. Client portals, internal tools, API integrations that just work.</p>
+                </div>
+            </div>
+        </div>
+    </section>
+
+    <!-- Process -->
+    <section id="process" class="py-32 relative">
+        <div class="max-w-7xl mx-auto px-6">
+            <div class="text-center mb-24">
+                <span class="font-mono text-xs text-ark-400 tracking-[0.4em] uppercase block mb-4">Method</span>
+                <h2 class="font-display font-bold text-5xl md:text-7xl text-white kinetic">How We Work</h2>
+            </div>
+
+            <div class="relative max-w-4xl mx-auto">
+                <div class="absolute left-8 md:left-1/2 top-0 bottom-0 w-px bg-gradient-to-b from-ark-500/50 via-purple-500/30 to-transparent hidden md:block"></div>
+
+                <div class="space-y-32">
+                    <div class="process-step grid md:grid-cols-2 gap-8 items-center">
+                        <div class="md:text-right md:pr-16">
+                            <span class="font-mono text-8xl font-bold text-white/5 block mb-2">01</span>
+                            <h3 class="font-display font-bold text-3xl text-white mb-4">Discovery</h3>
+                            <p class="text-gray-400 leading-relaxed">Map operations. Identify time leaks. Define "done." No templates, no assumptions.</p>
+                        </div>
+                        <div class="md:pl-16 relative">
+                            <div class="absolute left-0 md:-left-3 top-1/2 -translate-y-1/2 w-6 h-6 rounded-full bg-ark-500 border-4 border-void hidden md:block"></div>
+                            <div class="p-6 rounded-2xl bg-surface/50 border border-white/5">
+                                <span class="font-mono text-xs text-gray-600">1-2 days · Free</span>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="process-step grid md:grid-cols-2 gap-8 items-center">
+                        <div class="md:order-2 md:pl-16">
+                            <span class="font-mono text-8xl font-bold text-white/5 block mb-2">02</span>
+                            <h3 class="font-display font-bold text-3xl text-white mb-4">Architecture</h3>
+                            <p class="text-gray-400 leading-relaxed">Design the minimal viable system. Every component serves a purpose. No bloat.</p>
+                        </div>
+                        <div class="md:order-1 md:text-right md:pr-16 relative">
+                            <div class="absolute right-0 md:-right-3 top-1/2 -translate-y-1/2 w-6 h-6 rounded-full bg-purple-500 border-4 border-void hidden md:block"></div>
+                            <div class="p-6 rounded-2xl bg-surface/50 border border-white/5">
+                                <span class="font-mono text-xs text-gray-600">2-3 days</span>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="process-step grid md:grid-cols-2 gap-8 items-center">
+                        <div class="md:text-right md:pr-16">
+                            <span class="font-mono text-8xl font-bold text-white/5 block mb-2">03</span>
+                            <h3 class="font-display font-bold text-3xl text-white mb-4">Build</h3>
+                            <p class="text-gray-400 leading-relaxed">Weekly demos. Real data. Iterate on usage, not assumptions.</p>
+                        </div>
+                        <div class="md:pl-16 relative">
+                            <div class="absolute left-0 md:-left-3 top-1/2 -translate-y-1/2 w-6 h-6 rounded-full bg-pink-500 border-4 border-void hidden md:block"></div>
+                            <div class="p-6 rounded-2xl bg-surface/50 border border-white/5">
+                                <span class="font-mono text-xs text-gray-600">1-4 weeks</span>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="process-step grid md:grid-cols-2 gap-8 items-center">
+                        <div class="md:order-2 md:pl-16">
+                            <span class="font-mono text-8xl font-bold text-white/5 block mb-2">04</span>
+                            <h3 class="font-display font-bold text-3xl text-white mb-4">Deploy</h3>
+                            <p class="text-gray-400 leading-relaxed">Production with monitoring, docs, and a roadmap for evolution.</p>
+                        </div>
+                        <div class="md:order-1 md:text-right md:pr-16 relative">
+                            <div class="absolute right-0 md:-right-3 top-1/2 -translate-y-1/2 w-6 h-6 rounded-full bg-emerald-500 border-4 border-void hidden md:block"></div>
+                            <div class="p-6 rounded-2xl bg-surface/50 border border-white/5">
+                                <span class="font-mono text-xs text-gray-600">Ongoing</span>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </section>
+
+    <!-- Pricing -->
+    <section id="pricing" class="py-32 relative">
+        <div class="max-w-5xl mx-auto px-6">
+            <div class="text-center mb-20">
+                <span class="font-mono text-xs text-ark-400 tracking-[0.4em] uppercase block mb-4">Investment</span>
+                <h2 class="font-display font-bold text-5xl md:text-7xl text-white kinetic">Pricing</h2>
+            </div>
+
+            <div class="grid md:grid-cols-2 gap-8">
+                <div class="tilt-card p-10 rounded-3xl bg-surface/50 border border-white/5 relative overflow-hidden" data-tilt>
+                    <div class="relative z-10">
+                        <div class="flex items-center justify-between mb-8">
+                            <h3 class="font-display font-bold text-2xl text-white">Project</h3>
+                            <span class="font-mono text-xs text-gray-600">ONE-TIME</span>
+                        </div>
+                        <div class="mb-8">
+                            <span class="font-display text-6xl font-bold text-white">£500</span>
+                            <span class="text-gray-600"> – £5k</span>
+                        </div>
+                        <ul class="space-y-4 mb-10">
+                            <li class="flex items-center gap-3 text-gray-300"><svg class="w-5 h-5 text-ark-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"/></svg>Scoping & architecture</li>
+                            <li class="flex items-center gap-3 text-gray-300"><svg class="w-5 h-5 text-ark-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"/></svg>Full build & deployment</li>
+                            <li class="flex items-center gap-3 text-gray-300"><svg class="w-5 h-5 text-ark-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"/></svg>Documentation & handover</li>
+                            <li class="flex items-center gap-3 text-gray-300"><svg class="w-5 h-5 text-ark-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"/></svg>2 weeks support</li>
+                        </ul>
+                        <a href="#contact" class="block w-full py-4 text-center rounded-full border border-white/10 text-white hover:bg-white/5 transition-colors font-medium">Discuss Project</a>
+                    </div>
+                </div>
+
+                <div class="tilt-card p-10 rounded-3xl bg-surface/50 border border-ark-500/20 relative overflow-hidden" data-tilt>
+                    <div class="absolute -top-3 left-1/2 -translate-x-1/2">
+                        <span class="px-4 py-1 rounded-full bg-ark-500 text-white text-xs font-mono font-bold">RECOMMENDED</span>
+                    </div>
+                    <div class="relative z-10">
+                        <div class="flex items-center justify-between mb-8">
+                            <h3 class="font-display font-bold text-2xl text-white">Retainer</h3>
+                            <span class="font-mono text-xs text-gray-600">MONTHLY</span>
+                        </div>
+                        <div class="mb-8">
+                            <span class="font-display text-6xl font-bold text-white">£1,500</span>
+                            <span class="text-gray-600">/mo</span>
+                        </div>
+                        <ul class="space-y-4 mb-10">
+                            <li class="flex items-center gap-3 text-gray-300"><svg class="w-5 h-5 text-ark-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"/></svg>Everything in Project</li>
+                            <li class="flex items-center gap-3 text-gray-300"><svg class="w-5 h-5 text-ark-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"/></svg>Continuous improvements</li>
+                            <li class="flex items-center gap-3 text-gray-300"><svg class="w-5 h-5 text-ark-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"/></svg>Priority support (24h)</li>
+                            <li class="flex items-center gap-3 text-gray-300"><svg class="w-5 h-5 text-ark-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"/></svg>Monthly strategy</li>
+                        </ul>
+                        <a href="#contact" class="block w-full py-4 text-center rounded-full bg-ark-600 text-white hover:bg-ark-500 transition-colors font-medium noise-btn">Start Retainer</a>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </section>
+
+    <!-- Contact -->
+    <section id="contact" class="py-32 relative overflow-hidden">
+        <div class="absolute inset-0">
+            <div class="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[800px] h-[800px] bg-ark-600/10 rounded-full blur-[200px]"></div>
+        </div>
+
+        <div class="relative max-w-2xl mx-auto px-6">
+            <div class="text-center mb-16">
+                <span class="font-mono text-xs text-ark-400 tracking-[0.4em] uppercase block mb-4">Initiate</span>
+                <h2 class="font-display font-bold text-5xl md:text-7xl text-white kinetic mb-6">Let's Talk</h2>
+                <p class="text-gray-400">Describe what you're trying to automate. We'll respond within 24 hours.</p>
+            </div>
+
+            <form class="space-y-6" action="https://formspree.io/f/YOUR_FORM_ID" method="POST" id="contactForm">
+                <div class="grid md:grid-cols-2 gap-6">
+                    <div>
+                        <label class="block font-mono text-xs text-gray-600 uppercase tracking-wider mb-2">Name</label>
+                        <input type="text" name="name" required class="w-full px-5 py-4 bg-surface/50 border border-white/10 rounded-xl text-white placeholder-gray-700 focus:outline-none focus:border-ark-500/50 transition-colors" placeholder="Your name">
+                    </div>
+                    <div>
+                        <label class="block font-mono text-xs text-gray-600 uppercase tracking-wider mb-2">Email</label>
+                        <input type="email" name="email" required class="w-full px-5 py-4 bg-surface/50 border border-white/10 rounded-xl text-white placeholder-gray-700 focus:outline-none focus:border-ark-500/50 transition-colors" placeholder="you@company.com">
+                    </div>
+                </div>
+
+                <div>
+                    <label class="block font-mono text-xs text-gray-600 uppercase tracking-wider mb-2">Project Type</label>
+                    <select name="project_type" class="w-full px-5 py-4 bg-surface/50 border border-white/10 rounded-xl text-white focus:outline-none focus:border-ark-500/50 transition-colors">
+                        <option>AI Agent</option>
+                        <option>Workflow Automation</option>
+                        <option>Data Solution</option>
+                        <option>Web Platform</option>
+                        <option>Not Sure</option>
+                    </select>
+                </div>
+
+                <div>
+                    <label class="block font-mono text-xs text-gray-600 uppercase tracking-wider mb-2">What are you automating?</label>
+                    <textarea name="message" rows="5" required class="w-full px-5 py-4 bg-surface/50 border border-white/10 rounded-xl text-white placeholder-gray-700 focus:outline-none focus:border-ark-500/50 transition-colors resize-none" placeholder="The repetitive work eating your time..."></textarea>
+                </div>
+
+                <button type="submit" class="w-full py-4 bg-white text-void rounded-xl font-medium hover:scale-[1.02] transition-transform noise-btn flex items-center justify-center gap-2">
+                    Send Message
+                    <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M14 5l7 7m0 0l-7 7m7-7H3"/></svg>
+                </button>
+            </form>
+        </div>
+    </section>
+
+    <!-- Footer -->
+    <footer class="py-12 border-t border-white/5">
+        <div class="max-w-7xl mx-auto px-6 flex flex-col md:flex-row justify-between items-center gap-6">
+            <div class="flex items-center gap-3">
+                <img src="https://imgur.com/qOiYN9X.png" alt="HasArk" class="w-8 h-8 rounded-lg object-cover opacity-50">
+                <span class="font-display text-sm text-gray-700">HasArk — Autonomous Systems</span>
+            </div>
+            <div class="flex gap-6 text-xs text-gray-700 font-mono">
+                <span>Founded in Bangladesh</span>
+                <span>Built for the World</span>
+                <span>© 2026</span>
+            </div>
+        </div>
+    </footer>
+
+    <script>
+        // ===== WEBGL LIQUID BACKGROUND =====
+        const canvas = document.getElementById('webgl-bg');
+        const renderer = new THREE.WebGLRenderer({ canvas, alpha: true, antialias: true });
+        renderer.setSize(window.innerWidth, window.innerHeight);
+        renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
+
+        const scene = new THREE.Scene();
+        const camera = new THREE.OrthographicCamera(-1, 1, 1, -1, 0, 1);
+
+        const vertexShader = `
+            varying vec2 vUv;
+            void main() {
+                vUv = uv;
+                gl_Position = vec4(position, 1.0);
+            }
+        `;
+
+        const fragmentShader = `
+            uniform float uTime;
+            uniform vec2 uMouse;
+            uniform vec2 uResolution;
+            varying vec2 vUv;
+
+            vec3 mod289(vec3 x) { return x - floor(x * (1.0 / 289.0)) * 289.0; }
+            vec2 mod289(vec2 x) { return x - floor(x * (1.0 / 289.0)) * 289.0; }
+            vec3 permute(vec3 x) { return mod289(((x*34.0)+1.0)*x); }
+
+            float snoise(vec2 v) {
+                const vec4 C = vec4(0.211324865405187, 0.366025403784439, -0.577350269189626, 0.024390243902439);
+                vec2 i = floor(v + dot(v, C.yy));
+                vec2 x0 = v - i + dot(i, C.xx);
+                vec2 i1 = (x0.x > x0.y) ? vec2(1.0, 0.0) : vec2(0.0, 1.0);
+                vec4 x12 = x0.xyxy + C.xxzz;
+                x12.xy -= i1;
+                i = mod289(i);
+                vec3 p = permute(permute(i.y + vec3(0.0, i1.y, 1.0)) + i.x + vec3(0.0, i1.x, 1.0));
+                vec3 m = max(0.5 - vec3(dot(x0,x0), dot(x12.xy,x12.xy), dot(x12.zw,x12.zw)), 0.0);
+                m = m*m; m = m*m;
+                vec3 x = 2.0 * fract(p * C.www) - 1.0;
+                vec3 h = abs(x) - 0.5;
+                vec3 ox = floor(x + 0.5);
+                vec3 a0 = x - ox;
+                m *= 1.79284291400159 - 0.85373472095314 * (a0*a0 + h*h);
+                vec3 g;
+                g.x = a0.x * x0.x + h.x * x0.y;
+                g.yz = a0.yz * x12.xz + h.yz * x12.yw;
+                return 130.0 * dot(m, g);
+            }
+
+            void main() {
+                vec2 uv = vUv;
+                vec2 mouse = uMouse * 0.5 + 0.5;
+                
+                float noise1 = snoise(uv * 3.0 + uTime * 0.1);
+                float noise2 = snoise(uv * 2.0 - uTime * 0.15);
+                float noise3 = snoise(uv * 4.0 + uTime * 0.08);
+                
+                float mouseInfluence = smoothstep(0.5, 0.0, distance(uv, mouse));
+                
+                float finalNoise = noise1 * 0.5 + noise2 * 0.3 + noise3 * 0.2;
+                finalNoise += mouseInfluence * 0.3;
+                
+                vec3 color1 = vec3(0.02, 0.01, 0.05);
+                vec3 color2 = vec3(0.08, 0.04, 0.15);
+                vec3 color3 = vec3(0.15, 0.08, 0.25);
+                
+                vec3 color = mix(color1, color2, finalNoise * 0.5 + 0.5);
+                color = mix(color, color3, mouseInfluence * 0.4);
+                
+                gl_FragColor = vec4(color, 1.0);
+            }
+        `;
+
+        const uniforms = {
+            uTime: { value: 0 },
+            uMouse: { value: new THREE.Vector2(0, 0) },
+            uResolution: { value: new THREE.Vector2(window.innerWidth, window.innerHeight) }
+        };
+
+        const material = new THREE.ShaderMaterial({
+            vertexShader,
+            fragmentShader,
+            uniforms
+        });
+
+        const geometry = new THREE.PlaneGeometry(2, 2);
+        const mesh = new THREE.Mesh(geometry, material);
+        scene.add(mesh);
+
+        function animateWebGL() {
+            uniforms.uTime.value += 0.01;
+            renderer.render(scene, camera);
+            requestAnimationFrame(animateWebGL);
+        }
+        animateWebGL();
+
+        window.addEventListener('resize', () => {
+            renderer.setSize(window.innerWidth, window.innerHeight);
+            uniforms.uResolution.value.set(window.innerWidth, window.innerHeight);
+        });
+
+        // ===== CURSOR SYSTEM =====
+        const cursorSystem = document.getElementById('cursorSystem');
+        let cursorX = 0, cursorY = 0, targetX = 0, targetY = 0;
+
+        document.addEventListener('mousemove', (e) => {
+            targetX = e.clientX;
+            targetY = e.clientY;
+            
+            document.documentElement.style.setProperty('--mouse-x', e.clientX / window.innerWidth);
+            document.documentElement.style.setProperty('--mouse-y', e.clientY / window.innerHeight);
+            
+            uniforms.uMouse.value.set(
+                (e.clientX / window.innerWidth) * 2 - 1,
+                -(e.clientY / window.innerHeight) * 2 + 1
+            );
+        });
+
+        function animateCursor() {
+            cursorX += (targetX - cursorX) * 0.15;
+            cursorY += (targetY - cursorY) * 0.15;
+            cursorSystem.style.transform = `translate(${cursorX}px, ${cursorY}px)`;
+            requestAnimationFrame(animateCursor);
+        }
+        animateCursor();
+
+        document.querySelectorAll('a, button, [data-tilt], .cursor-pointer').forEach(el => {
+            el.addEventListener('mouseenter', () => cursorSystem.classList.add('hover'));
+            el.addEventListener('mouseleave', () => cursorSystem.classList.remove('hover'));
+        });
+
+        // ===== MAGNETIC EFFECT =====
+        document.querySelectorAll('.magnetic').forEach(el => {
+            el.addEventListener('mousemove', (e) => {
+                const rect = el.getBoundingClientRect();
+                const x = e.clientX - rect.left - rect.width / 2;
+                const y = e.clientY - rect.top - rect.height / 2;
+                el.style.transform = `translate(${x * 0.3}px, ${y * 0.3}px)`;
+            });
+            el.addEventListener('mouseleave', () => {
+                el.style.transform = 'translate(0, 0)';
+            });
+        });
+
+        // ===== 3D TILT =====
+        document.querySelectorAll('[data-tilt]').forEach(card => {
+            card.addEventListener('mousemove', (e) => {
+                const rect = card.getBoundingClientRect();
+                const x = (e.clientX - rect.left) / rect.width - 0.5;
+                const y = (e.clientY - rect.top) / rect.height - 0.5;
+                card.style.transform = `perspective(1000px) rotateY(${x * 10}deg) rotateX(${-y * 10}deg)`;
+            });
+            card.addEventListener('mouseleave', () => {
+                card.style.transform = 'perspective(1000px) rotateY(0) rotateX(0)';
+            });
+        });
+
+        // ===== GSAP ANIMATIONS =====
+        gsap.registerPlugin(ScrollTrigger);
+
+        gsap.from('#heroLine1, #heroLine3', {
+            y: 100,
+            opacity: 0,
+            duration: 1.2,
+            stagger: 0.2,
+            ease: 'power4.out',
+            delay: 0.3
+        });
+
+        gsap.from('#scrambleLabel', {
+            y: 20,
+            opacity: 0,
+            duration: 0.8,
+            ease: 'power3.out',
+            delay: 0.1
+        });
+
+        gsap.from('.process-step', {
+            y: 60,
+            opacity: 0,
+            duration: 1,
+            stagger: 0.3,
+            ease: 'power3.out',
+            scrollTrigger: { trigger: '#process', start: 'top 60%', once: true }
+        });
+
+        ScrollTrigger.create({
+            start: 'top -100',
+            onUpdate: (self) => {
+                document.getElementById('dock').classList.toggle('visible', self.scroll() > 100);
+            }
+        });
+
+        // Velocity skew
+        let lastScroll = 0;
+        window.addEventListener('scroll', () => {
+            const currentScroll = window.scrollY;
+            const velocity = (currentScroll - lastScroll) * 0.1;
+            const clamped = Math.max(-5, Math.min(5, velocity));
+            document.querySelectorAll('.velocity-skew').forEach(el => {
+                el.style.transform = `skewY(${clamped}deg)`;
+            });
+            lastScroll = currentScroll;
+        }, { passive: true });
+
+        // Form
+        const form = document.getElementById('contactForm');
+        form.addEventListener('submit', (e) => {
+            const btn = form.querySelector('button[type="submit"]');
+            btn.innerHTML = `<svg class="w-5 h-5 animate-spin" fill="none" viewBox="0 0 24 24"><circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle><path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path></svg> Sending...`;
+            btn.disabled = true;
+        });
+    </script>
+</body>
+</html>
